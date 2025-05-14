@@ -31,7 +31,7 @@ app.use(limiter);
 
 // CORS
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: 'http://localhost:8090',
   methods: ['GET' , 'POST' , 'PUT' , 'PATCH' , 'DELETE'],
   allowedHeaders: ['Content-type' , 'Authorization']
 }));
