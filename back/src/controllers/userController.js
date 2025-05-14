@@ -22,7 +22,17 @@ async function createUser(req, res) {
     const userExists = await User.checkExists(email, username);
 
     if (userExists) {
-      return res.status(409).json({ message: 'User with this username or email already exists.' });
+      // Check if email exists
+      const emailExists = await User.findByEmail(email);
+      if (emailExists) {
+        return res.status(409).json({ message: 'Email already in use.' });
+      }
+
+      // Check if username exists
+      const usernameExists = await User.findByUsername(username);
+      if (usernameExists) {
+        return res.status(409).json({ message: 'Username already taken.' });
+      }
     }
 
     const newUser = await User.create({
@@ -54,7 +64,7 @@ async function deleteUser(req, res) {
 
     // Not letting admin delete itself
     if (parseInt(id) === req.user.id) {
-      return res.status(400).json({ message: 'You cannot delete your own account' });
+      return res.status(401).json({ message: 'You cannot delete your own account' });
     }
     
     const deleted = await User.deleteById(id);
@@ -82,7 +92,7 @@ async function updateUserRole(req, res) {
 
     // Not letting admin change their role
     if (parseInt(id) === req.user.id) {
-      return res.status(400).json({ message: 'You cannot change your role' });
+      return res.status(401).json({ message: 'You cannot change your role' });
     }
 
     const updated = await User.updateRole(id, role);

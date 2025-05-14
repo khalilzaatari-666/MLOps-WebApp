@@ -1,5 +1,8 @@
 import axios, { Axios, AxiosError, AxiosResponse } from 'axios';
-import { DatasetResponse, CreateDatasetRequest, ClientResponse, ImageResponse, ModelResponse, TrainModelRequest, TrainingResponse, TrainingStatusResponse, TrainingTaskStatus, ModelSelectionResponse, ModelSelectConfig } from './types';
+import { DatasetResponse, CreateDatasetRequest, ClientResponse, ImageResponse, ModelResponse, 
+  TrainModelRequest, TrainingResponse, TrainingStatusResponse, TrainingTaskStatus, 
+  ModelSelectionResponse, ModelSelectConfig,
+  BestModelInfo } from './types';
 
 const API_URL = 'http://localhost:8000';
 
@@ -69,7 +72,7 @@ export const getDataset = async (status: string): Promise<DatasetResponse> => {
 // Clients API methods
 export const getClients = async (): Promise<ClientResponse[]> => {
   try {
-    const response: AxiosResponse<ClientResponse[]> = await fastApi.post('/users');
+    const response: AxiosResponse<ClientResponse[]> = await fastApi.get('/users');
     return response.data;
   } catch (error) {
     handleError(error as AxiosError);
@@ -246,4 +249,16 @@ export const selectBestModel = async (request: ModelSelectConfig): Promise<Model
   }
 };
 
-export default fastApi;
+export const bestModelInfo = async (datasetId: number): Promise<BestModelInfo> => {
+  try {
+    const response: AxiosResponse<BestModelInfo> = await fastApi.get(`/best-model/${datasetId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error in best model info:', error);
+    throw error;
+  }
+};
+
+// Exporting all the API methods
+const mlopsService = {createDataset, listDatasets, getDataset, getClients, listClients, listImages, listModels, getModel, downloadRawDataset, downloadLabelsDataset, autoAnnotateDataset, validateAnnotations};
+export { mlopsService };

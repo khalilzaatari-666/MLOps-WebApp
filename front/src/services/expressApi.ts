@@ -24,7 +24,7 @@ expressApi.interceptors.request.use(
 
 export const login = async (credential: string, password: string) => {
     try {
-        const response = await expressApi.post("/auth/login", { credential, password });
+        const response = await expressApi.post(`/auth/login`, { credential, password });
         return response.data;
     } catch (error) {
         throw error;
@@ -33,7 +33,7 @@ export const login = async (credential: string, password: string) => {
 
 export const register = async (username: string, email: string, password: string) => {
     try {
-        const response = await expressApi.post("/auth/register", { username, email, password });
+        const response = await expressApi.post(`/auth/register"`, { username, email, password });
         return response.data;
     } catch (error) {
         throw error;
@@ -42,7 +42,7 @@ export const register = async (username: string, email: string, password: string
 
 export const getProfile = async () => {
     try {
-        const response = await expressApi.get("/users");
+        const response = await expressApi.get(`/auth/profile`);
         return response.data;
     } catch (error) {
         throw error;
@@ -51,8 +51,8 @@ export const getProfile = async () => {
 
 export const getUsers = async () => {
     try {
-        const response = await expressApi.get("/users");
-        return response.data;
+        const response = await expressApi.get(`/users`);
+        return response.data.users;
     } catch (error) {
         throw error;
     }
@@ -60,7 +60,7 @@ export const getUsers = async () => {
 
 export const createUser = async (userData: { username: string; email: string; password: string; role: string }) => {
     try {
-        const response = await expressApi.post("/users", userData);
+        const response = await expressApi.post(`/users`, userData);
         return response.data;
     } catch (error) {
         throw error;
@@ -78,7 +78,7 @@ export const deleteUser = async (userId: string) => {
 
 export const updateUserRole = async (id: string, role: string)=> {
     try {
-        const response = await expressApi.patch(`/users/${id}`, { role });
+        const response = await expressApi.patch(`/users/${id}/role`, { role });
         return response.data;
     } catch (error) {
         throw error;

@@ -31,6 +31,17 @@ class User {
     }
   }
 
+    static async findByEmail(email) {
+    const [user] = await pool.execute('SELECT * FROM datas WHERE email = ?', [email]);
+    return user[0]; // returns user object or undefined
+  }
+
+  // Check if username exists
+  static async findByUsername(username) {
+    const [user] = await pool.execute('SELECT * FROM datas WHERE username = ?', [username]);
+    return user[0]; // returns user object or undefined
+  }
+
   // Create new user 
   static async create(userData) {
     try {

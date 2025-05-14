@@ -68,48 +68,114 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const handleAddUser = async () => {
-    try {
-      if (!newUser.username || !newUser.email || !newUser.password) {
-        toast.error('Please fill all required fields');
-        return;
+const handleAddUser = async () => {
+  try {
+    // Validate required fields
+    if (!newUser.username || !newUser.email || !newUser.password) {
+      toast.error('Username, email, and password are required');
+      return;
+    }
+
+    // Validate email format (basic check)
+    if (!/^\S+@\S+\.\S+$/.test(newUser.email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    // Validate password strength (optional)
+    if (newUser.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    // Send request to backend
+    const response = await createUser(newUser);
+
+    // Success: Reset form and refresh user list
+    toast.success('User added successfully');
+    setShowAddDialog(false);
+    setNewUser({ username: '', email: '', password: '', role: 'user' });
+    fetchUsers();
+
+  } catch (error) {
+    // Handle known error cases
+    if (error.response) {
+      // Backend validation errors (409, 400, etc.)
+      const { status, data } = error.response;
+      
+      if (status === 409) {
+        toast.error(data.message || 'User already exists'); // "Email/username taken"
+      } 
+      else if (status === 400) {
+        toast.error(data.message || 'Invalid input data');
       }
-
-      await createUser(newUser);
-      toast.success('User added successfully');
-      setShowAddDialog(false);
-      setNewUser({ username: '', email: '', password: '', role: 'user' });
-      fetchUsers();
-    } catch (error) {
-      toast.error('Failed to add user');
-      console.error(error);
+      else {
+        toast.error(`Error: ${data.message || 'Unknown server error'}`);
+      }
+    } 
+    // Network errors (no internet, CORS, etc.)
+    else if (error.request) {
+      toast.error('Network error - please check your connection');
+    } 
+    // Frontend errors (thrown manually)
+    else {
+      toast.error(`Error: ${error.message}`);
     }
-  };
 
-  const handleChangeRole = async (userId: string, newRole: string) => {
-    try {
-      await updateUserRole(userId, newRole);
-      toast.success('User role updated successfully');
-      fetchUsers();
-    } catch (error) {
+    console.error('User creation failed:', error);
+  }
+};
+
+const handleChangeRole = async (userId: string, newRole: string) => {
+  try {
+    await updateUserRole(userId, newRole);
+    toast.success('User role updated successfully');
+    fetchUsers();
+  } catch (error) {
+    // Check for specific error responses from backend
+    if (error.response) {
+      if (error.response.status === 400) {
+        toast.error(error.response.data.message || 'Invalid operation');
+      } else if (error.response.status === 404) {
+        toast.error('User not found');
+      } else if (error.response.status === 401) {
+        toast.error("You can't change your role")
+      } else {
+        toast.error('Failed to update user role');
+      }
+    } else {
       toast.error('Failed to update user role');
-      console.error(error);
     }
-  };
+    console.error(error);
+  }
+};
 
-  const handleDeleteUser = async () => {
-    if (!selectedUser) return;
-    
-    try {
-      await deleteUser(selectedUser.id);
-      toast.success('User deleted successfully');
-      setShowDeleteDialog(false);
-      fetchUsers();
-    } catch (error) {
+const handleDeleteUser = async () => {
+  if (!selectedUser) return;
+  
+  try {
+    await deleteUser(selectedUser.id);
+    toast.success('User deleted successfully');
+    setShowDeleteDialog(false);
+    fetchUsers();
+  } catch (error) {
+    // Check for specific error responses from backend
+    if (error.response) {
+      if (error.response.status === 400) {
+        toast.error(error.response.data.message || 'Cannot delete your own account');
+      } else if (error.response.status === 404) {
+        toast.error('User not found');
+      } else if (error.reponse.status === 401){
+        toast.error("You can't delete yourself")  
+      } else {
+        toast.error('Failed to delete user');
+      }
+    } else {
       toast.error('Failed to delete user');
-      console.error(error);
     }
-  };
+    console.error(error);
+  }
+};
 
   return (
     <div className="space-y-6">
@@ -138,8 +204,14 @@ const UserManagement: React.FC = () => {
                 <Input
                   id="username"
                   value={newUser.username}
-                  onChange={(e) => setNewUser({...newUser, username: e.target.value})}
-                  placeholder="Username"
+                  onChange={(e) => {
+                    const username = e.target.value;
+                    const valid = /^[a-zA-Z0-9_]*$/.test(username);
+                    if (valid || username === '') {
+                    setNewUser({...newUser, username});}
+                    }
+                  }
+                  placeholder="username"
                 />
               </div>
               
