@@ -12,20 +12,20 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import UserManagement from "./pages/admin/UserManagement";
+import PretrainedModelManagement from "./pages/admin/PretrainedModelManagement";
 import DatasetCreation from "./pages/dashboard/DatasetCreation";
 import DatasetAnnotation from "./pages/dashboard/DatasetAnnotation";
 import NewModel from "./pages/dashboard/NewModel";
+import ModelTraining from "./pages/dashboard/ModelTraining";
+import SelectBestModel from "./pages/dashboard/SelectBestModel";
+import ModelTesting from "./pages/dashboard/ModelTesting";
+//import ModelDeployment from "./pages/dashboard/ModelDeployment";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter
-      future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-    >
+    <BrowserRouter>
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
@@ -50,6 +50,7 @@ const App = () => (
             >
               <Route index element={<Navigate to="/admin/users" replace />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="pretrained-models" element={<PretrainedModelManagement />} />
             </Route>
             
             {/* User Routes */}
@@ -66,6 +67,9 @@ const App = () => (
               <Route path="dataset-creation" element={<DatasetCreation />} />
               <Route path="dataset-annotation" element={<DatasetAnnotation />} />
               <Route path="new-model" element={<NewModel />} />
+              <Route path="model-training" element={<ModelTraining />} />
+              <Route path="best-model-selection" element={<SelectBestModel />} />
+              <Route path="model-testing" element={<ModelTesting />} />
             </Route>
             
             {/* 404 Route */}

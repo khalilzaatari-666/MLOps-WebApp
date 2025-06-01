@@ -48,7 +48,6 @@ const UserManagement: React.FC = () => {
   });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {

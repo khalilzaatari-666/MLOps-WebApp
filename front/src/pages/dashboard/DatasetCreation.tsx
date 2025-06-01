@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { getClients, listModels, createDataset } from '../../services/fastApi';
+import React, { useState, useEffect, useMemo } from 'react';
+import { getClients, createDataset, listDatasets } from '../../services/fastApi';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -24,10 +24,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
-import { CheckCheck, CalendarIcon } from 'lucide-react';
+import { CheckCheck, CalendarIcon, Database, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Badge } from "@/components/ui/badge";
 
 interface Client {
   id: number;
@@ -35,21 +36,20 @@ interface Client {
   company_name: string;
 }
 
-interface Model {
+interface Dataset {
   id: number;
   name: string;
-  model_type: string;
-  model_path: string;
-  input_size: number;
-  class_names: string[];
-  device: string;
-  is_active: boolean;
-  last_used: string;
+  model: string;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+  status: string;
+  count: number;
 }
 
 const DatasetCreation: React.FC = () => {
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [models, setModels] = useState<Model[]>([]);
   const [selectedGroup, setSelectedGroup] = useState('');
   const [start_date, setStartDate] = useState<Date | undefined>(undefined);
   const [end_date, setEndDate] = useState<Date | undefined>(undefined);
@@ -57,26 +57,32 @@ const DatasetCreation: React.FC = () => {
   const [selectAll, setSelectAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingDatasets, setLoadingDatasets] = useState(true);
+  const [sortConfig, setSortConfig] = useState({key: 'created_at', direction:'desc',})
 
-  // Get current date (for date picker max value)
   const today = new Date();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [clientsData, modelsData] = await Promise.all([
+        setLoadingDatasets(true);
+        const [clientsData, datasetsData] = await Promise.all([
           getClients(),
-          listModels()
+          listDatasets()
         ]);
         
         setClients(clientsData);
-        setModels(modelsData);
+        setDatasets(datasetsData);
       } catch (error) {
-        toast.error('Failed to fetch data');
+        toast({
+          title: "Error",
+          description: 'Failed to fetch data'
+        });
         console.error(error);
       } finally {
         setLoading(false);
+        setLoadingDatasets(false);
       }
     };
 
@@ -102,42 +108,57 @@ const DatasetCreation: React.FC = () => {
   };
 
   const handleCreateDataset = async () => {
-    // Validate form
     if (!selectedGroup) {
-      toast.error('Please select a group');
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please select a model"
+      });
       return;
     }
     
     if (!start_date || !end_date) {
-      toast.error('Please select both start and end dates');
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please select both start and end dates"
+      });
       return;
     }
     
     if (start_date > end_date) {
-      toast.error('Start date cannot be after end date');
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Start date cannot be after end date"
+      });
       return;
     }
 
     try {
       setSubmitting(true);
       
-      // If no clients are selected, select all
       const clientIds = selectedClients.length === 0 
         ? clients.map(client => client.id)
         : selectedClients;
+
+      const formatDate = (date: Date) => date.toISOString().split("T")[0];
       
       await createDataset({
         model: selectedGroup,
-        start_date: start_date.toISOString(),
-        end_date: end_date.toISOString(),
+        start_date: formatDate(start_date),
+        end_date: formatDate(end_date), 
         user_ids: clientIds
       });
       
-      toast.success('Dataset created successfully', {
-        icon: <CheckCheck className="h-4 w-4" />,
+      toast({
+        title: "Success",
+        description: "Dataset created successfully"
       });
       
-      // Reset form
+      const newDatasets = await listDatasets();
+      setDatasets(newDatasets);
+      
       setSelectedGroup('');
       setStartDate(undefined);
       setEndDate(undefined);
@@ -145,12 +166,86 @@ const DatasetCreation: React.FC = () => {
       setSelectAll(false);
       
     } catch (error) {
-      toast.error('Failed to create dataset');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to create dataset"
+      });
       console.error(error);
     } finally {
       setSubmitting(false);
     }
   };
+
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedDatasets = useMemo(() => {
+    const sortableItems = [...datasets];
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+      if (sortConfig.key === 'created_at') {
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
+          return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
+        } else if (sortConfig.key === 'count') {
+          return sortConfig.direction === 'asc' 
+            ? a.count - b.count 
+            : b.count - a.count;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [datasets, sortConfig]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'VALIDATED':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'RAW':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'AUTO_ANNOTATED':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'AUGMENTED':
+        return 'bg-blue-100 text-blue-800 border-blue-200'
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const handleEndDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    
+    if (date > today) {
+      toast({
+        title: "Invalid Date",
+        description: "End date cannot be in the future",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (start_date && date < start_date) {
+      toast({
+        title: "Invalid Date",
+        description: "End date cannot be before start date",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setEndDate(date);
+  };
+  
+  const formatDate = (dateString) => {
+    return format(new Date(dateString), 'MMM d, yyyy');
+  };  
 
   return (
     <div className="space-y-6">
@@ -178,12 +273,12 @@ const DatasetCreation: React.FC = () => {
                     <SelectValue placeholder="Select a group" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="melon, pasteque, concombre, courgette, pg_cucurbit, artichaut">Melon, Watermelon, Cucumber, Zucchini, Cucurbit, Artichoke</SelectItem>
-                    <SelectItem value="tomate, aubergine, poivron">Tomato, Eggplant, Bell Pepper</SelectItem>
-                    <SelectItem value="poireau">Leek</SelectItem>
-                    <SelectItem value="radis, choux de bruxelles">Radish, Brussels Sprouts</SelectItem>
-                    <SelectItem value="haricot">Bean</SelectItem>
-                    <SelectItem value="salad">Salad</SelectItem>
+                    <SelectItem value='melon, pasteque, concombre, courgette, pg_cucurbit, artichaut'>Melon, Watermelon, Cucumber, Zucchini, Cucurbit, Artichoke</SelectItem>
+                    <SelectItem value='tomate, aubergine, poivron'>Tomato, Eggplant, Bell Pepper</SelectItem>
+                    <SelectItem value='poireau'>Leek</SelectItem>
+                    <SelectItem value='radis, choux de bruxelles'>Radish, Brussels Sprouts</SelectItem>
+                    <SelectItem value='haricot'>Bean</SelectItem>
+                    <SelectItem value='salad'>Salad</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -239,7 +334,7 @@ const DatasetCreation: React.FC = () => {
                     <Calendar
                       mode="single"
                       selected={end_date}
-                      onSelect={setEndDate}
+                      onSelect={handleEndDateSelect}
                       disabled={(date) => date > today}
                       initialFocus
                       className="p-3 pointer-events-auto"
@@ -321,6 +416,100 @@ const DatasetCreation: React.FC = () => {
           {submitting ? "Creating..." : "Create Dataset"}
         </Button>
       </div>
+      
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5 text-green-600" />
+            Available Datasets
+          </CardTitle>
+          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+            {datasets.length} Datasets
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {loadingDatasets ? (
+            <div className="py-8 text-center">Loading datasets...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-center">Name</TableHead>
+                    <TableHead className="text-center">Model</TableHead>
+                    <TableCell 
+                      onClick={() => requestSort('created_at')}
+                      style={{ cursor: 'pointer' }}
+                      className="text-center"
+                    >
+                      Created At
+                      {sortConfig.key === 'created_at' && (
+                        sortConfig.direction === 'asc' ? ' ↑' : ' ↓'
+                      )}
+                    </TableCell>
+                    <TableHead className="text-center">Date Range</TableHead>
+                    <TableCell 
+                      onClick={() => requestSort('count')}
+                      style={{ cursor: 'pointer' }}
+                      className="text-center"
+                    >
+                      Image Count
+                      {sortConfig.key === 'count' && (
+                        sortConfig.direction === 'asc' ? ' ↑' : ' ↓'
+                      )}
+                    </TableCell>
+                    <TableHead className="text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedDatasets.length > 0 ? (
+                    sortedDatasets.map((dataset) => (
+                      <TableRow key={dataset.id}>
+                        <TableCell className="text-center align-middle">
+                          <div className='flex items-center justify-center gap-2'>
+                            <FileSpreadsheet className="h-4 w-4 text-gray-500" />
+                            {dataset.name}
+                          </div>
+                        </TableCell>
+                        <TableCell>{dataset.model}</TableCell>
+                        <TableCell className="text-center align-middle">{format(new Date(dataset.created_at), 'PPP')}</TableCell>
+                        <TableCell className="text-center align-middle">
+                          {formatDate(dataset.start_date)} - {formatDate(dataset.end_date)}
+                        </TableCell>
+                        <TableCell className="text-center align-middle">{dataset.count}</TableCell>
+                        <TableCell className="text-center align-middle">
+                          <Badge className={cn("font-normal capitalize", getStatusColor(dataset.status))}>
+                            {dataset.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8">
+                        No datasets available. Create your first dataset above.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      {submitting && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-md p-6 shadow-lg max-w-sm w-full">
+            <h3 className="text-lg font-medium mb-2 text-center">Dataset creation in progress</h3>
+            <div className="flex justify-center my-4">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+              Please wait while the images are being downloaded downloaded (Waiting time depends on your internet speed, number of images and images size)
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

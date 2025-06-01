@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Database, FileText, Layers, LogOut } from 'lucide-react';
+import { Brain, Database, FileText, Layers, LogOut } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -25,11 +25,12 @@ const AppSidebar: React.FC = () => {
   const userItems = [
     { title: 'Dataset Creation', url: '/dashboard/dataset-creation', icon: Database },
     { title: 'Dataset Annotation', url: '/dashboard/dataset-annotation', icon: FileText },
-    { title: 'New Model Creation', url: '/dashboard/new-model', icon: Layers }
+    { title: 'New Model Creation', url: '/dashboard/new-model', icon: Layers },
   ];
 
   const adminItems = [
-    { title: 'User Management', url: '/admin/users', icon: Database }
+    { title: 'User Management', url: '/admin/users', icon: Database },
+    { title: 'Pre-trained Models Management', url: '/admin/pretrained-models', icon: Brain}
   ];
 
   const items = user?.role === 'admin' ? adminItems : userItems;
