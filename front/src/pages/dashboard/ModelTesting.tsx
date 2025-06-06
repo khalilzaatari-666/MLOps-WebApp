@@ -1,23 +1,23 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { getLatestInstanceInfo, listDatasets, getBestModelInfo, testModel } from "@/services/fastApi";
-import { BestModelInfo, InstanceInfo, TestModelConfig, TestResults } from "@/services/types";
+import { getLatestInstanceInfo, listDatasets, getLatestInstanceTasks, getTestingResults, startTesting } from "@/services/fastApi";
+import { BestModelInfo, InstanceInfo, TrainingTask, TestModelRequest, TestingResults } from "@/services/types";
 import { Switch } from "@/components/ui/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Target, TestTube, Cpu, Clock, Database, CheckCircle, Zap } from "lucide-react";
+import { TestTube, Cpu, Clock, Play } from "lucide-react";
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Table } from "@/components/ui/table";
 import { useNavigate } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 
 const ModelTesting: React.FC = () => {
     const {toast} = useToast();
     const queryClient = useQueryClient();
-    const [selectedDatasetId, setSelectedDatasetId] = useState<number | null>(null);
     const [useGpu, setUseGpu] = useState<boolean>(true);
-    const [testResults, setTestResults] = useState<TestResults | null>(null);
     const navigate = useNavigate()
 
     const { data: instanceInfo, isLoading: instanceLoading, error: instanceError} = useQuery<InstanceInfo>({
@@ -25,44 +25,53 @@ const ModelTesting: React.FC = () => {
         queryFn: getLatestInstanceInfo,
     });
 
-    const { data: bestModelInfo, isLoading: modelLoading } = useQuery<BestModelInfo>({
-        queryKey: ['best-model-info', instanceInfo?.dataset_id],
-        queryFn: () => getBestModelInfo(instanceInfo!.dataset_id),
+    const { data: trainedModels = [], isLoading: modelsLoading } = useQuery<TrainingTask[]>({
+        queryKey: ['latest-instance-tasks'],
+        queryFn: getLatestInstanceTasks,
+    });
+
+    const { data: testingResults, isLoading: testingLoading } = useQuery<TestingResults>({
+        queryKey: ['testing-results', instanceInfo?.dataset_id],
+        queryFn: () => getTestingResults(instanceInfo!.dataset_id),
         enabled: !!instanceInfo?.dataset_id,
+        refetchInterval: 3000,
     });
 
-    const { data: datasets = [], isLoading: datasetsLoading } = useQuery({
-        queryKey: ['datasets'],
-        queryFn: listDatasets,
-    });
-
-    const testModelMutation = useMutation({
-        mutationFn: testModel,
-        onSuccess: (data: TestResults) => {
-            setTestResults(data);
-            toast({
-                title: "Success",
-                description: "Model testing completed successfully!",
-            });
+    const startTestingMutation = useMutation({
+        mutationFn: startTesting,
+        onSuccess: (data) => {
+        toast({
+            title: "Success",
+            description: `Testing started successfully! ${data.test_task_ids.length} tasks queued.`,
+        });
+        // Refetch testing results
+        queryClient.invalidateQueries({ queryKey: ['testing-results'] });
+        },
+        onError: (error: any) => {
+        toast({
+            title: "Error",
+            description: error.message || "Failed to start testing",
+            variant: "destructive",
+        });
         },
     });
 
-    const handleTestModel = () => {
-        if (!selectedDatasetId) {
-            toast({
-                title: "Error",
-                description: "Please select a dataset to test on",
-                variant: "destructive",
-            });
-            return;
+    const handleStartTesting = () => {
+        if (!instanceInfo?.dataset_id) {
+        toast({
+            title: "Error",
+            description: "No dataset information available",
+            variant: "destructive",
+        });
+        return;
         }
 
-        const config: TestModelConfig = {
-            dataset_id: selectedDatasetId,
-            use_gpu: useGpu,
+        const request: TestModelRequest = {
+        dataset_id: instanceInfo.dataset_id,
+        useGpu: useGpu,
         };
 
-        testModelMutation.mutate(config);
+        startTestingMutation.mutate(request);
     };
 
     const formatMetricValue = (value: number | undefined | null | string) => {
@@ -70,7 +79,13 @@ const ModelTesting: React.FC = () => {
         return isFinite(num) ? num.toFixed(4) : 'N/A';
     };
 
-    const isLoading = instanceLoading || modelLoading || datasetsLoading;
+    const handleNavigateToTraining = () => {
+        try {
+            navigate('/dashboard/model-training')
+        } catch (err) {
+            console.error('Navigation error:', err)
+        }
+    };   
 
     const handleNavigateToSelection = () => {
         try {
@@ -80,272 +95,249 @@ const ModelTesting: React.FC = () => {
         }
     };   
 
-    const handleNavigateToDeployment = () => {
-        try {
-            navigate('/dashboard/model-deployment')
-        } catch (err) {
-            console.error('Navigation error:', err)
+    const getStatusColor = (status: string) => {
+        switch (status?.toLowerCase()) {
+        case 'completed':
+            return 'bg-green-100 text-green-800';
+        case 'in_progress':
+            return 'bg-blue-100 text-blue-800';
+        case 'pending':
+            return 'bg-yellow-100 text-yellow-800';
+        case 'failed':
+            return 'bg-red-100 text-red-800';
+        default:
+            return 'bg-gray-100 text-gray-800';
         }
-    };   
+    };
 
-    if (isLoading) {
+    const formatMetric = (value: number | null | undefined) => {
+        return value ? value.toFixed(4) : 'N/A';
+    };
+
+    if (instanceLoading || modelsLoading) {
         return (
         <div className="space-y-6">
             <div>
             <h1 className="text-2xl font-bold">Model Testing</h1>
-            <p className="text-gray-500">Test your best model on different datasets</p>
+            <p className="text-gray-500">Test all trained models from the last training instance</p>
             </div>
             <Card>
             <CardContent className="flex items-center justify-center h-60">
-                <p className="text-gray-500">Loading model and dataset information...</p>
+                <p className="text-gray-500">Loading...</p>
             </CardContent>
             </Card>
         </div>
         );
     }
 
-    if (instanceError || !instanceInfo) {
+    if (!instanceInfo) {
         return (
         <div className="space-y-6">
             <div>
             <h1 className="text-2xl font-bold">Model Testing</h1>
-            <p className="text-gray-500">Test your best model on different datasets</p>
+            <p className="text-gray-500">Test all trained models from the latest training instance</p>
             </div>
             <Card>
             <CardContent className="flex items-center justify-center h-60">
-                <p className="text-red-500">Error loading instance information</p>
+                <p className="text-red-500">No training instance information available</p>
             </CardContent>
             </Card>
         </div>
         );
     }
+
+    const completedModels = trainedModels.filter(model => model.status === 'COMPLETED');
+    const hasTestingResults = testingResults && testingResults.progress.total_tasks > 0;
 
     return (
         <div className="space-y-6">
             <div>
                 <h1 className="text-2xl font-bold">Model Testing</h1>
-                <p className="text-gray-500">Test your best model on different datasets</p>
+                <p className="text-gray-500">Test all trained models from the latest training instance</p>
             </div>
 
-            {/* Best Model Information */}
+            {/* Instance Information */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Target className="h-5 w-5" />
-                        Best Model Information
-                    </CardTitle>
+                <CardTitle>Training Instance Information</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="md:col-span-2">
-                        <Label className="text-sm font-medium text-gray-600">Trained Dataset</Label>
-                        <p className="text-lg font-semibold break-words">{instanceInfo.dataset_name}</p>
-                        </div>
-                        <div>
-                        <Label className="text-sm font-medium text-gray-600">Model Score</Label>
-                        <p className="text-lg font-semibold">{formatMetricValue(bestModelInfo?.score)}</p>
-                        </div>
-                        <div>
-                        <Label className="text-sm font-medium text-gray-600">Scoring Metric</Label>
-                        <p className="text-lg font-semibold">{bestModelInfo?.model_info.metric}</p>
-                        </div>
-                        <div className="md:col-span-4">
-                        <Label className="text-sm font-medium text-gray-600">Training Parameters</Label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                            <div className="flex justify-between text-sm border-b py-1">
-                            <span className="font-medium text-gray-700">Total Epochs</span>
-                            <span className="text-gray-800">{bestModelInfo?.model_info.params?.epochs}</span>
-                            </div>
-                            <div className="flex justify-between text-sm border-b py-1">
-                            <span className="font-medium text-gray-700">Batch Size</span>
-                            <span className="text-gray-800">{bestModelInfo?.model_info.params?.batch}</span>
-                            </div>
-                            <div className="flex justify-between text-sm border-b py-1">
-                            <span className="font-medium text-gray-700">Image Size</span>
-                            <span className="text-gray-800">{bestModelInfo?.model_info.params?.imgsz}</span>
-                            </div>
-                            <div className="flex justify-between text-sm border-b py-1">
-                            <span className="font-medium text-gray-700">Learning Rate</span>
-                            <span className="text-gray-800">{bestModelInfo?.model_info.params?.lr0}</span>
-                            </div>
-                        </div>
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                    <Label className="text-sm font-medium text-gray-600">Dataset</Label>
+                    <p className="text-lg font-semibold">{instanceInfo.dataset_name}</p>
                     </div>
+                    <div>
+                    <Label className="text-sm font-medium text-gray-600">Dataset Group</Label>
+                    <p className="text-lg font-semibold">{instanceInfo.dataset_group}</p>
+                    </div>
+                    <div>
+                    <Label className="text-sm font-medium text-gray-600">Training Jobs</Label>
+                    <p className="text-lg font-semibold">{completedModels.length}</p>
+                    </div>
+                </div>
                 </CardContent>
             </Card>
 
-            {/* Available Datasets */}
+            {/* Testing Configuration */}
             <Card>
                 <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                    <Database className="h-5 w-5" />
-                    Available Test Datasets
+                    <TestTube className="h-5 w-5" />
+                    Testing Configuration
                 </CardTitle>
-                <p className="text-sm text-gray-600">
-                    Datasets in the same group: {instanceInfo.dataset_group}
-                </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                    <Switch
+                    id="use-gpu"
+                    checked={useGpu}
+                    onCheckedChange={setUseGpu}
+                    />
+                    <Label htmlFor="use-gpu" className="flex items-center gap-2">
+                    <Cpu className="h-4 w-4" />
+                    Use GPU for testing
+                    </Label>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                    <p className="text-sm text-gray-600">
+                    This will test all {completedModels.length} completed models on the test dataset
+                    </p>
+                    <Button 
+                    onClick={handleStartTesting}
+                    disabled={startTestingMutation.isPending || completedModels.length === 0}
+                    className="flex items-center gap-2"
+                    >
+                    {startTestingMutation.isPending ? (
+                        <>
+                        <Clock className="h-4 w-4 animate-spin" />
+                        Starting...
+                        </>
+                    ) : (
+                        <>
+                        <Play className="h-4 w-4" />
+                        Start Testing All Models
+                        </>
+                    )}
+                    </Button>
+                </div>
+                </CardContent>
+            </Card>
+
+            {/* Testing Progress */}
+            {hasTestingResults && (
+                <Card>
+                <CardHeader>
+                    <CardTitle>Testing Progress</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                    <div>
+                        <p className="text-2xl font-bold text-blue-600">{testingResults.progress.total_tasks}</p>
+                        <p className="text-sm text-gray-600">Total Tasks</p>
+                    </div>
+                    <div>
+                        <p className="text-2xl font-bold text-yellow-600">{testingResults.progress.pending}</p>
+                        <p className="text-sm text-gray-600">Pending</p>
+                    </div>
+                    <div>
+                        <p className="text-2xl font-bold text-blue-600">{testingResults.progress.in_progress}</p>
+                        <p className="text-sm text-gray-600">In Progress</p>
+                    </div>
+                    <div>
+                        <p className="text-2xl font-bold text-green-600">{testingResults.progress.completed}</p>
+                        <p className="text-sm text-gray-600">Completed</p>
+                    </div>
+                    <div>
+                        <p className="text-2xl font-bold text-red-600">{testingResults.progress.failed}</p>
+                        <p className="text-sm text-gray-600">Failed</p>
+                    </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                        <span>Overall Progress</span>
+                        <span>{testingResults.progress.progress_percentage}%</span>
+                    </div>
+                    <Progress value={testingResults.progress.progress_percentage} className="w-full" />
+                    </div>
+                </CardContent>
+                </Card>
+            )}
+
+            {/* Testing Results Table */}
+            {hasTestingResults && (
+                <Card>
+                <CardHeader>
+                    <CardTitle>Testing Results</CardTitle>
                 </CardHeader>
                 <CardContent>
-                {datasets.length === 0 ? (
-                    <div className="text-center py-8">
-                    <p className="text-gray-500">No datasets available for testing</p>
-                    </div>
-                ) : (
                     <Table>
                     <TableHeader>
                         <TableRow>
-                        <TableHead className="text-center">Select</TableHead>
-                        <TableHead className="text-center">Name</TableHead>
-                        <TableHead className="text-center">Created</TableHead>
-                        <TableHead className="text-center">Date Range</TableHead>
-                        <TableHead className="text-center">Actions</TableHead>
+                        <TableHead>Queue Position</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Hyperparameters</TableHead>
+                        <TableHead>mAP50</TableHead>
+                        <TableHead>mAP50-95</TableHead>
+                        <TableHead>Precision</TableHead>
+                        <TableHead>Recall</TableHead>
+                        <TableHead>Duration</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {datasets
-                            .filter(
-                                (dataset) =>
-                                dataset.model === instanceInfo?.dataset_group &&
-                                dataset.id !== instanceInfo?.dataset_id &&
-                                dataset.status == 'AUGMENTED'
-                            )
-                            .map((dataset) => (
-                        <TableRow 
-                            key={dataset.id}
-                            className={selectedDatasetId === dataset.id ? 'bg-blue-50' : ''}
-                        >
-                            <TableCell className="text-center">
-                                <div className="flex justify-center">
-                                    <Button
-                                        variant={selectedDatasetId === dataset.id ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={() => setSelectedDatasetId(dataset.id)}
-                                        className="mx-auto"
-                                    >
-                                        {selectedDatasetId === dataset.id ? 'Selected' : 'Select'}
-                                    </Button>
-                                </div>
+                        {testingResults.tasks
+                        .sort((a, b) => a.queue_position - b.queue_position)
+                        .map((task) => (
+                        <TableRow key={task.test_task_id}>
+                            <TableCell>{task.queue_position + 1}</TableCell>
+                            <TableCell>
+                            <Badge className={getStatusColor(task.status)}>
+                                {task.status}
+                            </Badge>
                             </TableCell>
-                            <TableCell className="text-center">{dataset.name}</TableCell>
-                            <TableCell className="text-center">
-                            {new Date(dataset.created_at).toLocaleDateString()}
+                            <TableCell>
+                            <div className="text-xs">
+                                {task.hyperparameters ? (
+                                <>
+                                    <div>Epochs: {task.hyperparameters.epochs}</div>
+                                    <div>LR: {task.hyperparameters.lr0}</div>
+                                    <div>Batch: {task.hyperparameters.batch}</div>
+                                    <div>Image Size: {task.hyperparameters.imgsz}</div>
+                                </>
+                                ) : 'N/A'}
+                            </div>
                             </TableCell>
-                            <TableCell className="text-center">
-                                {new Date(dataset.start_date).toLocaleDateString()} - {new Date(dataset.end_date).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell className="text-center">
-                                <div className="flex justify-center items-center gap-3">
-                                    <div className="flex items-center space-x-2">
-                                        <Switch
-                                        id={`use-gpu-${dataset.id}`}
-                                        checked={useGpu}
-                                        onCheckedChange={setUseGpu}
-                                        />
-                                        <Label htmlFor={`use-gpu-${dataset.id}`} className="text-xs whitespace-nowrap">
-                                        GPU
-                                        </Label>
-                                    </div>
-                                    <Button
-                                        onClick={() => handleTestModel()}
-                                        disabled={testModelMutation.isPending || selectedDatasetId !== dataset.id}
-                                        size="sm"
-                                        className="flex items-center gap-1"
-                                    >
-                                        {testModelMutation.isPending && selectedDatasetId === dataset.id ? (
-                                        <>
-                                            <Clock className="h-3 w-3 animate-spin" />
-                                            Testing...
-                                        </>
-                                        ) : (
-                                        <>Run Test</>
-                                        )}
-                                    </Button>
-                                </div>
+                            <TableCell>{formatMetric(task.map50)}</TableCell>
+                            <TableCell>{formatMetric(task.map50_95)}</TableCell>
+                            <TableCell>{formatMetric(task.precision)}</TableCell>
+                            <TableCell>{formatMetric(task.recall)}</TableCell>
+                            <TableCell>
+                            {task.started_at && task.completed_at ? (
+                                `${Math.round((new Date(task.completed_at).getTime() - new Date(task.started_at).getTime()) / 1000)}s`
+                            ) : 'N/A'}
                             </TableCell>
                         </TableRow>
                         ))}
                     </TableBody>
                     </Table>
-                )}
                 </CardContent>
             </Card>
-
-            {/* Test Results */}
-            {testResults && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <CheckCircle className="h-5 w-5 text-green-600" />
-                            Test Results
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="text-center p-4 bg-blue-50 rounded-lg">
-                                <p className="text-sm text-gray-600">Precision</p>
-                                <p className="text-2xl font-bold text-blue-600">
-                                    {formatMetricValue(testResults.precision)}
-                                </p>
-                            </div>
-                            <div className="text-center p-4 bg-green-50 rounded-lg">
-                                <p className="text-sm text-gray-600">Recall</p>
-                                <p className="text-2xl font-bold text-green-600">
-                                    {formatMetricValue(testResults.recall)}
-                                </p>
-                            </div>
-                            <div className="text-center p-4 bg-purple-50 rounded-lg">
-                                <p className="text-sm text-gray-600">mAP50</p>
-                                <p className="text-2xl font-bold text-purple-600">
-                                    {formatMetricValue(testResults.map50)}
-                                </p>
-                            </div>
-                            <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                                <p className="text-sm text-gray-600">mAP50-95</p>
-                                <p className="text-2xl font-bold text-yellow-600">
-                                    {formatMetricValue(testResults.map)}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <p><strong>Test Duration:</strong> {testResults.duration_seconds.toFixed(2)} seconds</p>
-                                <p><strong>Inference Speed:</strong> {testResults.inference_speed} ms</p>
-                            </div>
-                            <div>
-                                <p><strong>Test Task ID:</strong> {testResults.test_task_id}</p>
-                                <p><strong>Completed:</strong> {new Date(testResults.test_timestamp).toLocaleString()}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
             )}
-            {testModelMutation.isPending && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-md p-6 shadow-lg max-w-sm w-full">
-                    <h3 className="text-lg font-medium mb-2 text-center">Model testing in progress</h3>
-                    <div className="flex justify-center my-4">
-                        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                        Please wait while the model is being tested on the selected dataset. This may take a few minutes depending on the dataset size and hardware.
-                    </p>
-                    </div>
-                </div>
-            )};
-            <div className='fixed bottom-6 left-[calc(250px+24px)]'>
+
+            <div className='flex justify-between items-center pt-6 border-t'>
+                <Button
+                    onClick={handleNavigateToTraining}
+                    size='lg'
+                    className='inline-flex items-center gap-2 px-6 py-4 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition'>
+                    Model Training
+                </Button>      
                 <Button
                     onClick={handleNavigateToSelection}
                     size='lg'
                     className='inline-flex items-center gap-2 px-6 py-4 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition'>
                     Best Model Selection
-                </Button>      
-            </div>
-            <div className='fixed bottom-6 right-6'>
-                <Button
-                    onClick={handleNavigateToDeployment}
-                    size='lg'
-                    className='inline-flex items-center gap-2 px-6 py-4 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition'>
-                    Model Deployment
                 </Button>
             </div>
         </div>

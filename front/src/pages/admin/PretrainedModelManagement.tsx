@@ -248,7 +248,7 @@ const PretrainedModelManagement: React.FC = () => {
             <Card>
                 <CardHeader>
                     <CardTitle>Models Library</CardTitle>
-                </CardHeader>~
+                </CardHeader>
                 <CardContent>
                     {loading ? (
                         <div className='flex justify-center py-8'>

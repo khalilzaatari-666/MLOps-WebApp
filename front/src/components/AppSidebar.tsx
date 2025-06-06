@@ -45,11 +45,21 @@ const AppSidebar: React.FC = () => {
       className={`border-r shadow-sm transition-all duration-300 ${collapsed ? "w-14" : "w-64"} bg-gradient-to-b from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-900/40`}
       collapsible="icon"
     >
-      <div className="p-4 flex justify-center">
+      <div className="p-4 flex justify-center items-center">
         {!collapsed ? (
-          <div className="text-lg font-bold font-poppins bg-gradient-green bg-clip-text text-transparent">MLOps Platform</div>
+          <div className="flex items-center gap-2">
+            <img 
+              src="/pcs_agri_logo.jpg" 
+              alt="PCS AGRI Logo"
+              className="h-30 w-auto"
+            />
+          </div>
         ) : (
-          <div className="text-xl font-bold text-green">ML</div>
+          <img 
+            src="/pcs_agri_logo.jpg"
+            alt="PCS AGRI"
+            className="h-8 w-auto" 
+          />
         )}
       </div>
 

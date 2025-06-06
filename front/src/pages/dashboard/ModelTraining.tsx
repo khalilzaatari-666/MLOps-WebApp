@@ -54,9 +54,9 @@ const ModelTraining: React.FC = () => {
     }
   }
 
-  const handleNavigateToSelection = () => {
+  const handleNavigateToTesting = () => {
     try {
-      navigate('/dashboard/best-model-selection')
+      navigate('/dashboard/model-testing')
     } catch (err) {
       console.error('Navigation error:', err)
     }
@@ -188,10 +188,10 @@ const ModelTraining: React.FC = () => {
       </div>
             <div className='fixed bottom-6 right-6'>
         <Button
-          onClick={handleNavigateToSelection}
+          onClick={handleNavigateToTesting}
           size='lg'
           className='inline-flex items-center gap-2 px-6 py-4 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition'>
-            Best Model Selection
+            Model Testing
         </Button>
       </div>
     </div>

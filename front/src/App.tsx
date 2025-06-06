@@ -19,6 +19,7 @@ import NewModel from "./pages/dashboard/NewModel";
 import ModelTraining from "./pages/dashboard/ModelTraining";
 import SelectBestModel from "./pages/dashboard/SelectBestModel";
 import ModelTesting from "./pages/dashboard/ModelTesting";
+import ModelDeployment from "./pages/dashboard/ModelDeployment";
 //import ModelDeployment from "./pages/dashboard/ModelDeployment";
 
 const queryClient = new QueryClient();
@@ -70,6 +71,7 @@ const App = () => (
               <Route path="model-training" element={<ModelTraining />} />
               <Route path="best-model-selection" element={<SelectBestModel />} />
               <Route path="model-testing" element={<ModelTesting />} />
+              <Route path="model-deployment" element={<ModelDeployment />} />
             </Route>
             
             {/* 404 Route */}

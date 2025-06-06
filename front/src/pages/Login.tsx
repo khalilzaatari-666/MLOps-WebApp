@@ -39,9 +39,9 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md z-10">
         <div className="flex justify-center mb-8">
           <img 
-            src="/pcs_agri_logo.jpg"
+            src="/pcs_agri_logo.jpg" 
             alt="Company Logo"
-            className="w-32 h-32 rounded-full object-cover hover:scale-105 transition-transform duration-300"
+            className="w-60 h-60 rounded-full object-cover hover:scale-105 transition-transform duration-300"
           />
         </div>
 

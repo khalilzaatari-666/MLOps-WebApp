@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { cn } from '@/lib/utils';
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from 'react-router-dom';
+import { DatasetAugmentationRequest } from '@/services/types';
 
 const TRANSFORMERS = [
   { value: "vertical_flip", label: "Vertical Flip" },
@@ -20,7 +21,7 @@ const TRANSFORMERS = [
 
 const NewModel: React.FC = () => {
   const { toast } = useToast();
-  const [selectedTransformers, setSelectedTransformers] = useState<Record<number, string>>({});
+  const [selectedTransformers, setSelectedTransformers] = useState<Record<number, string[]>>({});
   const [augmenting, setAugmenting] = useState(false);
   const navigate = useNavigate();
 
@@ -30,12 +31,20 @@ const NewModel: React.FC = () => {
   });
 
   const handleTransformerChange = (datasetId: number, transformer: string) => {
-    setSelectedTransformers(prev => ({ ...prev, [datasetId]: transformer }));
+    setSelectedTransformers(prev => {
+      const current = prev[datasetId] || [];
+      const exists = current.includes(transformer);
+      const updated = exists
+        ? current.filter(t => t !== transformer)
+        : [...current, transformer];
+      return { ...prev, [datasetId]: updated };
+    });
   };
 
+
   const handleAugmentDataset = async (datasetId: number) => {
-    const selectedTransformer = selectedTransformers[datasetId];
-    if (!selectedTransformer) {
+    const transformers = selectedTransformers[datasetId];
+    if (!transformers || transformers.length === 0) {
       toast({
         title: "Error",
         description: "Please select a transformer first",
@@ -46,7 +55,15 @@ const NewModel: React.FC = () => {
 
     try {
       setAugmenting(true);
-      await augmentDataset(datasetId, selectedTransformer);
+      const augmentationRequest: DatasetAugmentationRequest = {
+        dataset_id: datasetId,
+        transformers: transformers
+      };
+      console.log({
+        dataset_id: datasetId,
+        transformers: transformers,
+      });
+      await augmentDataset(augmentationRequest);
       toast({
         title: "Success",
         description: "Dataset augmentation started successfully",
@@ -134,7 +151,8 @@ const NewModel: React.FC = () => {
                   <TableHead>Created</TableHead>
                   <TableHead>Date Range</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Select Transformer</TableHead>
+                  <TableHead>Images Count</TableHead>
+                  <TableHead>Select Transformer(s)</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -156,29 +174,27 @@ const NewModel: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={selectedTransformers[dataset.id] || ""}
-                          onValueChange={(value) => handleTransformerChange(dataset.id, value)}
-                        >
-                          <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Select transformer" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TRANSFORMERS.map((transformer) => (
-                              <SelectItem 
-                                key={transformer.value} 
-                                value={transformer.value}
-                              >
-                                {transformer.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {dataset.count}
+                      </TableCell>
+                      <TableCell>
+                        <div className='space-y-1'>
+                          {TRANSFORMERS.map((transformer) => (
+                            <label key={transformer.value} className='flex items-center space-x-2'>
+                              <input
+                                type="checkbox"
+                                checked={selectedTransformers[dataset.id]?.includes(transformer.value) || false}
+                                onChange={() => handleTransformerChange(dataset.id, transformer.value)}
+                                className="form-checkbox h-4 w-4 text-blue-600"
+                              />
+                              <span>{transformer.label}</span>
+                            </label>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Button
                           onClick={() => handleAugmentDataset(dataset.id)}
-                          disabled={!selectedTransformers[dataset.id]}
+                          disabled={!selectedTransformers[dataset.id] || selectedTransformers[dataset.id].length === 0}
                           size='sm'
                         >
                           Augment

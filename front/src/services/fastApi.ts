@@ -3,8 +3,13 @@ import { DatasetResponse, CreateDatasetRequest, ClientResponse, ImageResponse, M
   TrainModelRequest, TrainingResponse, TrainingStatusResponse, TrainingTaskStatus, 
   ModelSelectionResponse, ModelSelectConfig, BestModelInfo, PretrainedModelResponse, ListModelsResponse,
   TrainingTask,
-  TestModelConfig,
-  TestResults} from './types';
+  DeployModelResponse,
+  DeployedModel,
+  DatasetAugmentationRequest,
+  TestModelRequest,
+  TestingResponse,
+  TestTaskDetails,
+  TestingResults} from './types';
 
 const API_URL = 'http://localhost:8000';
 
@@ -297,15 +302,35 @@ export const getBestModelInfo = async (datasetId: number): Promise<BestModelInfo
   }
 };
 
-export const testModel = async (config: TestModelConfig): Promise<TestResults> => {
+export const startTesting = async (request: TestModelRequest): Promise<TestingResponse> => {
   try {
-    const response: AxiosResponse<TestResults> = await fastApi.post(`/test-model/${config.dataset_id}?use_gpu=${config.use_gpu}`);
+    const response = await fastApi.post('/start_testing', request);
     return response.data;
   } catch (error) {
-    console.error('Error testing model:', error);
+    console.error('Error starting testing:', error);
     throw error;
   }
-}
+};
+
+export const getTestingResults = async (datasetId: number): Promise<TestingResults> => {
+  try {
+    const response = await fastApi.get(`/testing_results/${datasetId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error getting testing results:', error);
+    throw error;
+  }
+};
+
+export const getTestTaskResults = async (testTaskId: string): Promise<TestTaskDetails> => {
+  try {
+    const response = await fastApi.get(`/test_task/${testTaskId}/results`);
+    return response.data;
+  } catch (error) {
+    console.error('Error getting test task results:', error);
+    throw error;
+  }
+};
 
 // Pretrained models methods
 export const uploadPretrainedModel = async (model_file: File, group: string): Promise<void> => {
@@ -351,12 +376,37 @@ export const activateModel = async (model_id: number): Promise<void> => {
   }
 }
 
-export const augmentDataset = async (datasetId: number, transformer: string): Promise<void> => {
+export const augmentDataset = async (request: DatasetAugmentationRequest): Promise<void> => {
   try {
-    const response: AxiosResponse = await fastApi.post(`/augment-dataset` ,{dataset_id: datasetId, transformer: transformer});
+    const response: AxiosResponse = await fastApi.post(`/augment-dataset` ,request);
     return response.data;
   } catch (error) {
     console.error("Error augmenting dataset:", error);
     throw error;
   }
 };
+
+export const deployModel = async (): Promise<DeployModelResponse> => {
+  try {
+    const response: AxiosResponse = await fastApi.post("deploy_model");
+    return response.data;
+  }catch (error) {
+    console.error('Error deploying model:' , error);
+    throw error;
+  }
+};
+
+export const getDeployedModels = async (): Promise<DeployedModel[]> => {
+  try {
+    const response:AxiosResponse = await fastApi.get('/deployed_models');
+    console.log('API Response:', {
+      status: response.status,
+      data: response.data,
+      headers: response.headers
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching deployed models:' , error);
+    throw error;
+  }
+}

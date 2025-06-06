@@ -5,7 +5,7 @@ export enum TrainingStatus {
   FAILED = "FAILED"
 }
 
-export type SelectionMetric = 'accuracy' | 'precision' | 'recall'
+export type SelectionMetric = 'map50' | 'map50_95' | 'precision' | 'recall'
 
 export enum DatasetStatus {
   RAW = "RAW",  
@@ -205,14 +205,19 @@ export interface ModelSelectConfig {
 export interface ModelSelectionResponse {
   status: 'success' | 'error';
   best_model: {
-    id?: string | null;
-    task_id: string;
-    instance_id: number;
+    training_task_id: string;
+    test_task_id: string;
     dataset_id: number;
     model_path: string;
     params: HyperparameterConfig;
     score: number;
-    metrics: SelectionMetric;
+    metric: SelectionMetric;
+    test_metrics: {
+      map50: number | null;
+      map50_95: number | null;
+      precision: number | null;
+      recall: number | null;
+    };
   }
   error?: string;
   message?: string;
@@ -227,28 +232,6 @@ export interface BestModelInfo {
   score?: number;
   model_info?: any;
   created_at?: string;
-}
-
-export interface TestModelConfig {
-  dataset_id: number;
-  use_gpu: boolean;
-}
-
-export interface TestResults {
-  precision: number;
-  recall: number;
-  map50: number;
-  map: number;
-  inference_speed: number;
-  test_timestamp: string;
-  model_id: number;
-  model_path: string;
-  dataset_id: number;
-  trained_on_dataset: number;
-  start_date: string;
-  end_date: string;
-  duration_seconds: number;
-  test_task_id: string;
 }
 
 export interface ListModelsResponse {
@@ -268,4 +251,84 @@ export interface PretrainedModelResponse {
   last_used: string | null;
   file_exists: boolean;
   file_size: number;
+}
+
+export interface DeployedModel {
+  id: number;
+  dataset_id: number;
+  dataset_name: string;
+  dataset_group: string;
+  model_id: number;
+  path: string;
+  deployment_date: string;
+  score: number;
+  status: string;
+}
+
+export interface DeployModelResponse {
+  status: string;
+  message?: string;
+  destination_file?: string;
+  deployed_model_id?: number;
+  error?: string;
+}
+
+export interface DatasetAugmentationRequest {
+  dataset_id: number;
+  transformers: string[];
+}
+
+export interface TestModelRequest {
+  dataset_id: number;
+  useGpu: boolean;
+}
+
+export interface TestingResponse {
+  test_task_ids: string[];
+  status: 'success' | 'error';
+  message: string;
+}
+
+export interface TestingProgress {
+  total_tasks: number;
+  pending: number;
+  in_progress: number;
+  completed: number;
+  failed: number;
+  progress_percentage: number;
+}
+
+export interface TestTaskResult {
+  test_task_id: string;
+  training_task_id: string;
+  queue_position: number;
+  status: string;
+  hyperparameters: Record<string, any> | null;
+  model_path: string | null;
+  map50: number | null;
+  map50_95: number | null;
+  precision: number | null;
+  recall: number | null;
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface TestingResults {
+  dataset_id: number;
+  testing_instance_id: number | null;
+  testing_instance_created_at: string | null;
+  progress: TestingProgress;
+  tasks: TestTaskResult[];
+  message?: string;
+}
+
+export interface TestTaskDetails extends TestTaskResult {
+  duration_seconds: number | null;
+  metrics: {
+    map50: number | null;
+    map50_95: number | null;
+    precision: number | null;
+    recall: number | null;
+  };
 }

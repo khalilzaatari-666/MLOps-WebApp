@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { getLatestInstanceInfo, getLatestInstanceTasks, selectBestModel } from "@/services/fastApi";
+import { getLatestInstanceInfo, getLatestInstanceTasks, getTestingResults, selectBestModel } from "@/services/fastApi";
 import { ModelSelectConfig, SelectionMetric, TrainingTask } from "@/services/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trophy } from "lucide-react";
@@ -14,17 +14,18 @@ import { useNavigate } from "react-router-dom";
 const SelectBestModel: React.FC = () => {
     const {toast} = useToast();
     const queryClient = useQueryClient();
-    const [selectedMetric, setSelectedMetric] = useState<SelectionMetric>('accuracy');
+    const [selectedMetric, setSelectedMetric] = useState<SelectionMetric>('map50');
     const navigate = useNavigate();
-
-    const { data: tasks = [], isLoading: tasksLoading, error: tasksError} = useQuery({
-        queryKey: ['latest-instance-tasks'],
-        queryFn: getLatestInstanceTasks,
-    });
 
     const { data: instanceInfo, isLoading: instanceLoading, error: instanceError} = useQuery({
         queryKey: ['latest-instance-info'],
         queryFn: getLatestInstanceInfo,
+    });
+
+    const { data: testingResults, isLoading: testingLoading, error: testingError} = useQuery({
+        queryKey: ['testing-results', instanceInfo?.dataset_id],
+        queryFn: () => getTestingResults(instanceInfo!.dataset_id),
+        enabled: !!instanceInfo?.dataset_id,
     });
 
     const selectBestModelMutation = useMutation({
@@ -67,23 +68,12 @@ const SelectBestModel: React.FC = () => {
         return value ? value.toFixed(4) : 'N/A'
     };
 
-    const getMetricValue = (task: TrainingTask, metric: SelectionMetric) => {
-        if (!task.results) return undefined;
-        const metricsMapping: Record<SelectionMetric, string> = {
-            'accuracy': 'metrics/mAP50(B)',
-            'precision': 'metrics/precision(B)',
-            'recall': 'metrics/recall(B)',
-        };
-
-        return task.results[metricsMapping[metric]]
-    };
-
-    const completedTasks = tasks.filter((task: TrainingTask) => 
+    const completedTasks = testingResults?.tasks?.filter(task => 
         task.status?.toLowerCase() === 'completed'
-    );
+    ) || [];
 
-    const isLoading = tasksLoading || instanceLoading;
-    const error = tasksError ||  instanceError;
+    const isLoading = testingLoading || instanceLoading;
+    const error = testingError ||  instanceError;
 
     if (isLoading) {
         return (
@@ -117,9 +107,9 @@ const SelectBestModel: React.FC = () => {
             );
     }
 
-    const handleNavigateToTraining = () => {
+    const handleNavigateToDeployment = () => {
         try {
-            navigate('/dashboard/model-training')
+            navigate('/dashboard/model-deployment')
         } catch (err) {
             console.error('Navigation error:', err)
         }
@@ -167,7 +157,8 @@ const SelectBestModel: React.FC = () => {
                         <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                        <SelectItem value="accuracy">Accuracy (mAP50)</SelectItem>
+                        <SelectItem value="map50">mAP50</SelectItem>
+                        <SelectItem value="map5_95">mAP50-95</SelectItem>
                         <SelectItem value="precision">Precision</SelectItem>
                         <SelectItem value="recall">Recall</SelectItem>
                         </SelectContent>
@@ -190,48 +181,71 @@ const SelectBestModel: React.FC = () => {
             {/* Training Tasks Overview */}
             <Card>
                 <CardHeader>
-                <CardTitle>Training Jobs</CardTitle>
+                <CardTitle>Testing Results</CardTitle>
                 <p className="text-sm text-gray-600">
-                    Showing {tasks.length} tasks
+                    Showing {testingResults?.tasks?.length || 0} test tasks 
                 </p>
                 </CardHeader>
                 <CardContent>
-                {tasks.length === 0 ? (
+                {!testingResults?.tasks?.length ? (
                     <div className="text-center py-8">
-                    <p className="text-gray-500">No training tasks found</p>
+                    <p className="text-gray-500">No testing results found</p>
                     </div>
                 ) : (
                     <Table>
                     <TableHeader>
                         <TableRow>
-                        <TableHead>Dataset</TableHead>
-                        <TableHead>Parameters</TableHead>
-                        <TableHead>Accuracy</TableHead>
-                        <TableHead>Precision</TableHead>
-                        <TableHead>Recall</TableHead>
+                            <TableHead className="w-1/3">Test Task ID</TableHead>
+                            <TableHead>Queue Position</TableHead>
+                            <TableHead>Hyperparameters</TableHead>
+                            <TableHead>mAP50</TableHead>
+                            <TableHead>mAP50-95</TableHead>
+                            <TableHead>Precision</TableHead>
+                            <TableHead>Recall</TableHead>
+                            <TableHead>Duration</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {tasks.map((task: TrainingTask) => (
-                        <TableRow key={task.id}>
-                            <TableCell>{instanceInfo.dataset_name}</TableCell>
+                        {testingResults.tasks
+                        .sort((a,b) => a.queue_position - b.queue_position)
+                        .map((task) => (
+                        <TableRow key={task.test_task_id}>
+                            <TableCell className="font-mono text-sm">
+                                {task.test_task_id}
+                            </TableCell>
+                            <TableCell>{task.queue_position + 1}</TableCell>
                             <TableCell className="max-w-xs">
                             <div className="text-sm">
-                                <div>Epochs: {task.params?.epochs || 'N/A'}</div>
-                                <div>LR: {task.params?.lr0 || 'N/A'}</div>
-                                <div>Batch: {task.params?.batch || 'N/A'}</div>
-                                <div>Image Size: {task.params?.imgsz || 'N/A'}</div>
-                                <div>Momentum: {task.params?.momentum || 'N/A'}</div>
+                                {task.hyperparameters ? (
+                                <>
+                                    <div>Epochs: {task.hyperparameters.epochs || 'N/A'}</div>
+                                    <div>LR: {task.hyperparameters.lr0 || 'N/A'}</div>
+                                    <div>Batch: {task.hyperparameters.batch || 'N/A'}</div>
+                                    <div>Image Size: {task.hyperparameters.imgsz || 'N/A'}</div>
+                                </>
+                                ) : 'N/A'}
                             </div>
                             </TableCell>
                             <TableCell className="font-mono">
-                            {formatMetricValue(getMetricValue(task, 'accuracy'))}
+                            {formatMetricValue(task.map50)}
                             </TableCell>
                             <TableCell className="font-mono">
-                            {formatMetricValue(getMetricValue(task, 'precision'))}
+                            {formatMetricValue(task.map50_95)}
                             </TableCell>
                             <TableCell className="font-mono">
-                            {formatMetricValue(getMetricValue(task, 'recall'))}
+                            {formatMetricValue(task.precision)}
+                            </TableCell>
+                            <TableCell className="font-mono">
+                            {formatMetricValue(task.recall)}
+                            </TableCell>
+                            <TableCell>
+                            {task.started_at && task.completed_at ? (
+                                <span className="text-sm">
+                                {Math.round((new Date(task.completed_at).getTime() - new Date(task.started_at).getTime()) / 1000)}s
+                                </span>
+                            ) : (
+                                'N/A'
+                            )}
                             </TableCell>
                         </TableRow>
                         ))}
@@ -242,18 +256,18 @@ const SelectBestModel: React.FC = () => {
             </Card>
             <div className='fixed bottom-6 left-[calc(250px+24px)]'>
                 <Button
-                    onClick={handleNavigateToTraining}
+                    onClick={handleNavigateToTesting}
                     size='lg'
                     className='inline-flex items-center gap-2 px-6 py-4 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition'>
-                    Model Training
+                    Model Testing
                 </Button>
             </div>
             <div className='fixed bottom-6 right-6'>
                 <Button
-                    onClick={handleNavigateToTesting}
+                    onClick={handleNavigateToDeployment}
                     size='lg'
                     className='inline-flex items-center gap-2 px-6 py-4 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition'>
-                    Best Model Testing
+                    Model Deployment
                 </Button>
             </div>
         </div>
