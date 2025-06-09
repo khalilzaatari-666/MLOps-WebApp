@@ -33,7 +33,7 @@ export const login = async (credential: string, password: string) => {
 
 export const register = async (username: string, email: string, password: string) => {
     try {
-        const response = await expressApi.post(`/auth/register"`, { username, email, password });
+        const response = await expressApi.post(`/auth/register`, { username, email, password });
         return response.data;
     } catch (error) {
         throw error;

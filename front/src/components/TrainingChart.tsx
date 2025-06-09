@@ -315,7 +315,7 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ datasetId }) => {
                             <span>Overall Progress</span>
                             <span>{statusData.progress * 100}%</span>
                         </div>
-                        <Progress value={statusData.progress * 100} className="w-full" />
+                        <Progress value={parseFloat((statusData.progress * 100).toFixed(2))} className="w-full" />
                     </div>
                     
                     <div className="grid grid-cols-3 gap-4 pt-4">
@@ -425,7 +425,7 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ datasetId }) => {
             {/* Task Lists */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <TaskList title="Completed Tasks" tasks={completedTasks} />
-                <TaskList title="In Progress Tasks" tasks={inProgressTasks} showProgress={true} />
+                <TaskList title="In Progress Tasks" tasks={inProgressTasks} />
                 <TaskList title="Pending Tasks" tasks={pendingTasks} />
             </div>
         </div>

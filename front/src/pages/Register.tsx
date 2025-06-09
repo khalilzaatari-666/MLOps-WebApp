@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { register as apiRegister } from '../services/expressApi';
+import { register } from '../services/expressApi';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +30,7 @@ const Register: React.FC = () => {
 
     try {
       setIsLoading(true);
-      await apiRegister(username, email, password);
+      await register(username, email, password);
       toast.success('Registration successful! Please login.');
       navigate('/login');
     } catch (error: any) {
